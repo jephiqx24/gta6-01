@@ -1,276 +1,290 @@
-// Missions and the story. Rio owes Vera, the crew boss, $5,000 — five jobs
-// pay it off. Each mission is a chain of steps (go to, pick up, deliver,
-// survive a chase); the marker beacon, the HUD objective and the minimap
-// all read the same active step.
+// Five missions that pay off Rio's $5,000 debt to Vera, one at a time.
+// A stage is a target to reach, a car to steal, or a passenger to pick up.
+import { THREE } from './three.js';
+import { MISSION_REWARDS } from './config.js';
 
-import { DEBT_TOTAL } from './config.js';
-import { streetAt } from './config.js';
-
-const THREE = window.THREE;
-
-const MISSIONS = [  {
+export const MISSIONS = [
+  {
     id: 'first-fare',
-    title: 'The First Fare',
-    brief: 'Vera needs a package from the docks delivered to the Velvet Palm. No questions, no stops.',
-    reward: 700,
-    steps: [
-      { type: 'goto', at: 'docks', radius: 7, time: 75, text: 'Pick up the package at Docks 7' },
-      { type: 'goto', at: 'club', radius: 7, time: 90, text: 'Deliver the package to the Velvet Palm' },
+    name: 'The First Fare',
+    reward: MISSION_REWARDS[0],
+    timer: 0,
+    stages: [
+      { kind: 'goto', label: 'Pick up the package at Docks 7', target: 'docks', radius: 9 },
+      { kind: 'goto', label: 'Deliver the package to the drop point', target: 'drop1', radius: 9 },
     ],
   },
   {
     id: 'hot-wheels',
-    title: 'Hot Wheels',
-    brief: 'The chop shop needs a fresh ride. Take any car on the street and get it to the safehouse — the cops will notice.',
-    reward: 800,
-    steps: [
-      { type: 'steal', radius: 0, time: 90, text: 'Steal any car (walk up to one and press E)' },
-      { type: 'goto', at: 'safehouse', radius: 8, time: 75, text: 'Reach the safehouse — the heat is on', wanted: 2 },
+    name: 'Hot Wheels',
+    reward: MISSION_REWARDS[1],
+    timer: 150,
+    setWanted: 0,
+    stages: [
+      { kind: 'steal', label: 'Steal the red Comet parked on 5th', target: 'fastCar', radius: 4 },
+      { kind: 'goto', label: 'Reach the safehouse — the heat is on', target: 'safehouse', radius: 9 },
     ],
   },
   {
     id: 'cabbie',
-    title: 'Cabbie',
-    brief: 'A high roller at the Hotel Marina needs a ride to the marina. Keep it smooth — and fast.',
-    reward: 900,
-    steps: [
-      { type: 'pickup', at: 'hotel', radius: 6, time: 60, text: 'Pick up the fare at the Hotel Marina' },
-      { type: 'goto', at: 'marina', radius: 8, time: 120, text: 'Drop the fare at the marina' },
+    name: 'Cabbie',
+    reward: MISSION_REWARDS[2],
+    timer: 120,
+    stages: [
+      { kind: 'pickup', label: 'Pick up the fare on Marina Blvd', target: 'cabPickup', radius: 7 },
+      { kind: 'goto', label: 'Drive the fare to the Marina', target: 'marina', radius: 9 },
     ],
   },
   {
-    id: 'three-stops',
-    title: 'Three Stops',
-    brief: 'Three drops, three corners of the city, one van full of "imported goods". Then the warehouse.',
-    reward: 1100,
-    steps: [
-      { type: 'goto', at: { x: streetAt(1), z: streetAt(1) }, radius: 7, time: 60, text: 'Pick up drop 1 of 3 — north-west corner' },
-      { type: 'goto', at: { x: streetAt(6), z: streetAt(6) }, radius: 7, time: 60, text: 'Pick up drop 2 of 3 — south-east corner' },
-      { type: 'goto', at: { x: streetAt(2), z: streetAt(5) }, radius: 7, time: 60, text: 'Pick up drop 3 of 3 — west side' },
-      { type: 'goto', at: 'warehouse', radius: 8, time: 90, text: 'Deliver everything to the warehouse' },
+    id: 'getaway',
+    name: 'Getaway',
+    reward: MISSION_REWARDS[3],
+    timer: 150,
+    setWanted: 3,
+    stages: [
+      { kind: 'goto', label: 'Grab the package — police are already on you', target: 'getaway', radius: 8 },
+      { kind: 'goto', label: 'Lose the heat and reach the hideout', target: 'hideout', radius: 9 },
     ],
   },
   {
-    id: 'big-score',
-    title: 'The Big Score',
-    brief: 'The last job. Vera set the whole precinct on you — survive the chase, then vanish at the hideout. Do this and the debt is gone.',
-    reward: 1500,
-    steps: [
-      { type: 'survive', radius: 0, time: 60, text: 'Survive the 4-star chase — 60 seconds', wanted: 4 },
-      { type: 'goto', at: 'hideout', radius: 8, time: 60, text: 'Lose them and reach the hideout' },
+    id: 'final-payoff',
+    name: 'The Final Payoff',
+    reward: MISSION_REWARDS[4],
+    timer: 180,
+    setWanted: 4,
+    stages: [
+      { kind: 'goto', label: "Collect Vera's money at the club", target: 'club', radius: 8 },
+      { kind: 'goto', label: 'Deliver it to the North Gate — this clears the debt', target: 'northGate', radius: 9 },
     ],
   },
 ];
 
-export { MISSIONS as MISSION_DEFS };
+function makeMarkerMesh() {
+  const g = new THREE.Group();
+  const beam = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.4, 1.4, 60, 12, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false })
+  );
+  beam.position.y = 30;
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(2.4, 3.4, 32),
+    new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false })
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.25;
+  const diamond = new THREE.Mesh(
+    new THREE.OctahedronGeometry(1.1),
+    new THREE.MeshBasicMaterial({ color: 0xffd23f })
+  );
+  diamond.position.y = 7;
+  g.add(beam, ring, diamond);
+  g.userData = { ring, diamond };
+  return g;
+}
 
-export class Missions {
-  constructor(scene, city, random) {
-    this.scene = scene;
-    this.city = city;
-    this.random = random;
-    this.index = 0; // next mission to run
-    this.active = null; // { def, step, timer, started }
-    this.done = []; // completed mission ids
-    this.cash = 0;
-    this.debt = DEBT_TOTAL;
-    this.onComplete = null; // (mission) => void
-    this.onFail = null; // (mission, reason) => void
-    this.onStart = null; // (mission) => void
-    this.onStep = null; // (mission, step) => void
-    this.marker = this.buildMarker();
-    this.scene.add(this.marker.group);
-    this.marker.group.visible = false;
-    this.passenger = null; // the taxi fare ped
+function makePassengerMesh() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.72, 0.34), new THREE.MeshStandardMaterial({ color: 0x4f7ad8, roughness: 0.9 }));
+  body.position.y = 1.12;
+  body.castShadow = true;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 10, 8), new THREE.MeshStandardMaterial({ color: 0xf0c8a0, roughness: 0.8 }));
+  head.position.y = 1.68;
+  const legL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.75, 0.22), new THREE.MeshStandardMaterial({ color: 0x2a2a33, roughness: 1 }));
+  legL.position.set(-0.14, 0.38, 0);
+  const legR = legL.clone();
+  legR.position.x = 0.14;
+  g.add(body, head, legL, legR);
+  return g;
+}
+
+export function createMissions(scene, city, police, refs) {
+  const marker = makeMarkerMesh();
+  scene.add(marker);
+  const passenger = makePassengerMesh();
+  passenger.visible = false;
+  scene.add(passenger);
+  let index = 0;
+  let stage = 0;
+  let timer = 0;
+  let active = false;
+  let done = false;
+  let failFlash = 0;
+  let passengerAboard = false;
+
+  function current() {
+    return MISSIONS[index];
   }
 
-  buildMarker() {
-    const group = new THREE.Group();
-    const beamMat = new THREE.MeshBasicMaterial({
-      color: 0xffd24a, transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide,
-    });
-    const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 60, 12, 1, true), beamMat);
-    beam.position.y = 30;
-    group.add(beam);
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(2.4, 3.4, 32),
-      new THREE.MeshBasicMaterial({ color: 0xffd24a, transparent: true, opacity: 0.85, side: THREE.DoubleSide }),
-    );
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.15;
-    group.add(ring);
-    const diamond = new THREE.Mesh(
-      new THREE.OctahedronGeometry(0.9),
-      new THREE.MeshBasicMaterial({ color: 0xffd24a }),
-    );
-    diamond.position.y = 6;
-    group.add(diamond);
-    return { group, beam, ring, diamond };
-  }
-
-  get current() {
-    return MISSIONS[this.index] || null;
-  }
-
-  get debtPaid() {
-    return this.debt <= 0;
-  }
-
-  /** World position of a step target (location key or {x, z}). */
-  stepPos(step) {
-    if (typeof step.at === 'string') {
-      const loc = this.city.locations[step.at];
-      return { x: loc.x, z: loc.z, label: loc.label };
+  function stageTarget() {
+    const m = current();
+    if (!m) return null;
+    const s = m.stages[stage];
+    if (!s) return null;
+    if (s.kind === 'steal') {
+      const car = refs.fastCar;
+      return car ? { x: car.pos.x, z: car.pos.z, radius: s.radius, car } : null;
     }
-    return { x: step.at.x, z: step.at.z, label: 'Drop point' };
+    const p = city.places[s.target];
+    return p ? { x: p.x, z: p.z, radius: s.radius } : null;
   }
 
-  /** Where the next mission starts (its first step's position). */
-  startPos() {
-    const mission = this.current;
-    if (!mission) return null;
-    return this.stepPos(mission.steps[0]);
+  function start() {
+    active = true;
+    done = false;
+    index = 0;
+    stage = 0;
+    const m = current();
+    timer = m.timer;
+    if (m.setWanted) police.wanted = m.setWanted;
+    placePassenger();
   }
 
-  begin() {
-    const mission = this.current;
-    if (!mission || this.active) return;
-    this.active = { def: mission, step: 0, timer: mission.steps[0].time, started: true };
-    if (this.onStart) this.onStart(mission);
-    this.showMarkerForStep();
-  }
-
-  showMarkerForStep() {
-    if (!this.active) {
-      this.marker.group.visible = false;
-      return;
+  function placePassenger() {
+    const m = current();
+    if (!m) return;
+    const s = m.stages[stage];
+    passengerAboard = false;
+    if (s && s.kind === 'pickup') {
+      const p = city.places[s.target];
+      passenger.position.set(p.x, 0, p.z);
+      passenger.visible = true;
+    } else {
+      passenger.visible = false;
     }
-    const step = this.active.def.steps[this.active.step];
-    if (step.type === 'steal' || step.type === 'survive') {
-      this.marker.group.visible = false;
-      return;
-    }
-    const pos = this.stepPos(step);
-    this.marker.group.position.set(pos.x, 0, pos.z);
-    this.marker.group.visible = true;
   }
 
-  advanceStep(game) {
-    const mission = this.active.def;
-    this.active.step++;
-    if (this.active.step >= mission.steps.length) {
-      this.complete(game);
-      return;
+  function advanceStage() {
+    const m = current();
+    stage += 1;
+    if (stage >= m.stages.length) {
+      return true;
     }
-    const step = mission.steps[this.active.step];
-    this.active.timer = step.time;
-    if (step.wanted) game.police.setWanted(step.wanted);
-    if (this.onStep) this.onStep(mission, step);
-    this.showMarkerForStep();
-    game.audio.pickup();
+    placePassenger();
+    return false;
   }
 
-  complete(game) {
-    const mission = this.active.def;
-    this.active = null;
-    this.done.push(mission.id);
-    this.index++;
-    this.cash += mission.reward;
-    this.debt = Math.max(0, this.debt - mission.reward);
-    this.marker.group.visible = false;
-    game.audio.jingle();
-    game.particles.sparkle(game.player.x, 2, game.player.z);
-    if (this.onComplete) this.onComplete(mission);
+  function restartMission() {
+    stage = 0;
+    const m = current();
+    timer = m.timer;
+    failFlash = 3;
+    placePassenger();
   }
 
-  fail(game, reason) {
-    const mission = this.active.def;
-    this.active = null;
-    this.marker.group.visible = false;
-    if (this.onFail) this.onFail(mission, reason);
-  }
-
-  /** Called when the player gets into a car (steal step). */
-  onEnterCar(game) {
-    if (!this.active) return;
-    const step = this.active.def.steps[this.active.step];
-    if (step.type === 'steal') this.advanceStep(game);
-  }
-
-  update(dt, game) {
-    // Animate the marker.
-    if (this.marker.group.visible) {
-      const t = performance.now() / 1000;
-      this.marker.diamond.position.y = 6 + Math.sin(t * 2.5) * 0.5;
-      this.marker.diamond.rotation.y = t;
-      const pulse = 0.7 + Math.sin(t * 3) * 0.3;
-      this.marker.ring.scale.set(pulse, pulse, 1);
-    }
-    // Auto-begin the next mission when the player reaches its start marker.
-    if (!this.active && this.current) {
-      const pos = this.startPos();
-      const d = Math.hypot(game.player.x - pos.x, game.player.z - pos.z);
-      if (d < 8) this.begin();
-    }
-    if (!this.active) return;
-    const step = this.active.def.steps[this.active.step];
-    this.active.timer -= dt;
-    if (this.active.timer <= 0) {
-      if (step.type === 'survive') this.advanceStep(game);
-      else this.fail(game, 'Out of time');
-      return;
-    }
-    const player = game.player;
-    if (step.type === 'goto' || step.type === 'pickup') {
-      const pos = this.stepPos(step);
-      const d = Math.hypot(player.x - pos.x, player.z - pos.z);
-      if (d < step.radius) {
-        if (step.type === 'pickup') {
-          // The fare gets in: hide a nearby ped as the passenger.
-          game.audio.pickup();
-        }
-        this.advanceStep(game);
+  // Returns events: missionComplete, allComplete, missionFailed.
+  function update(dt, player) {
+    const events = [];
+    if (!active || done) return events;
+    const m = current();
+    if (!m) return events;
+    if (m.timer > 0) {
+      timer -= dt;
+      if (timer <= 0) {
+        events.push({ type: 'missionFailed', mission: m });
+        restartMission();
+        return events;
       }
     }
+    if (failFlash > 0) failFlash -= dt;
+    const t = stageTarget();
+    if (!t) return events;
+    const px = player.inCar ? player.car.pos.x : player.pos.x;
+    const pz = player.inCar ? player.car.pos.z : player.pos.z;
+    const s = m.stages[stage];
+    let complete = false;
+    if (s.kind === 'steal') {
+      complete = player.inCar && player.car === t.car;
+      if (complete && police.wanted < 2) police.wanted = 2;
+    } else if (s.kind === 'pickup') {
+      complete = Math.hypot(px - t.x, pz - t.z) < t.radius;
+      if (complete) {
+        passengerAboard = true;
+        passenger.visible = false;
+      }
+    } else {
+      complete = Math.hypot(px - t.x, pz - t.z) < t.radius;
+    }
+    if (complete) {
+      const finished = advanceStage();
+      if (finished) {
+        const reward = m.reward;
+        index += 1;
+        if (index >= MISSIONS.length) {
+          done = true;
+          active = false;
+          marker.visible = false;
+          events.push({ type: 'allComplete', mission: m, reward });
+        } else {
+          stage = 0;
+          const next = current();
+          timer = next.timer;
+          if (next.setWanted) police.wanted = next.setWanted;
+          placePassenger();
+          events.push({ type: 'missionComplete', mission: m, reward });
+        }
+      }
+    }
+    // Marker follows the current target.
+    const tgt = stageTarget();
+    if (tgt && !done) {
+      marker.visible = true;
+      marker.position.set(tgt.x, 0, tgt.z);
+      const pulse = 1 + Math.sin(performance.now() / 300) * 0.15;
+      marker.userData.ring.scale.set(pulse, pulse, 1);
+      marker.userData.diamond.rotation.y += dt * 2;
+      marker.userData.diamond.position.y = 7 + Math.sin(performance.now() / 400) * 0.6;
+    } else {
+      marker.visible = false;
+    }
+    return events;
   }
 
-  /** Objective line for the HUD. */
-  objectiveText() {
-    if (this.active) {
-      const step = this.active.def.steps[this.active.step];
-      const t = Math.max(0, Math.ceil(this.active.timer));
-      const mm = String(Math.floor(t / 60)).padStart(2, '0');
-      const ss = String(t % 60).padStart(2, '0');
-      return `${this.active.def.title} — ${step.text}  •  ${mm}:${ss}`;
-    }
-    if (this.current) {
-      const pos = this.startPos();
-      return `Next job: ${this.current.title} — reach the yellow marker (${pos.label})`;
-    }
-    return 'Debt paid. Solara City is yours — free roam.';
-  }
-
-  /** Distance to the current objective, for the HUD. */
-  objectiveDistance(player) {
-    if (!this.active) {
-      if (!this.current) return 0;
-      const pos = this.startPos();
-      return Math.hypot(player.x - pos.x, player.z - pos.z);
-    }
-    const step = this.active.def.steps[this.active.step];
-    if (step.type === 'steal' || step.type === 'survive') return 0;
-    const pos = this.stepPos(step);
-    return Math.hypot(player.x - pos.x, player.z - pos.z);
-  }
-
-  /** Marker world position for the minimap (null when none). */
-  markerPos() {
-    if (this.active) {
-      const step = this.active.def.steps[this.active.step];
-      if (step.type === 'steal' || step.type === 'survive') return null;
-      return this.stepPos(step);
-    }
-    if (this.current) return this.startPos();
-    return null;
-  }
+  return {
+    get index() {
+      return index;
+    },
+    get stage() {
+      return stage;
+    },
+    get active() {
+      return active;
+    },
+    get done() {
+      return done;
+    },
+    get failFlash() {
+      return failFlash;
+    },
+    get passengerAboard() {
+      return passengerAboard;
+    },
+    get timeLeft() {
+      const m = current();
+      return m && m.timer > 0 ? Math.max(0, timer) : null;
+    },
+    current,
+    stageTarget,
+    start,
+    update,
+    objectiveText() {
+      const m = current();
+      if (!m) return '';
+      const s = m.stages[stage];
+      return s ? `${m.name} — ${s.label}` : m.name;
+    },
+    setIndex(i) {
+      index = i;
+      stage = 0;
+      const m = current();
+      timer = m ? m.timer : 0;
+      placePassenger();
+    },
+    setStage(s) {
+      const m = current();
+      if (!m) return;
+      stage = Math.max(0, Math.min(m.stages.length - 1, s));
+      if (m.stages[stage].kind === 'goto' && stage > 0) passengerAboard = true;
+      placePassenger();
+    },
+  };
 }

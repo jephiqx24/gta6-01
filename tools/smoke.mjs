@@ -1,50 +1,60 @@
-// Smoke test: load the game, wait for it to boot, and report console
-// errors, failed/foreign requests and basic game state.
-// Usage: node tools/smoke.mjs [url] [waitMs]
-// Default URL is SOLARA_BASE (or http://localhost:8080) + /index.html?seed=7;
-// pass a file:// URL to test over file:// instead. Requests to the game's
-// own origin (localhost server or file://) are not foreign.
+// Smoke test: the game boots, WebGL renders, and the world is populated.
+// Runs at low FX and a small viewport (software renderer); the game logic
+// still runs in real time. Exits non-zero on any failure.
+import { launchGame, summarize, waitFor, GAME_URL } from './browser.mjs';
 
-import { openTab, sleep } from './cdp.mjs';
-
-const base = process.env.SOLARA_BASE || 'http://localhost:8080';
-const url = process.argv[2] || `${base.replace(/\/$/, '')}/index.html?seed=7`;
-const waitMs = Number(process.argv[3]) || 6000;
-const tab = await openTab(url, 1280, 720);
+const { browser, page, errors, requests } = await launchGame(GAME_URL + '?fx=low', 800, 450);
+let failed = 0;
 try {
-  await sleep(waitMs);
-  const state = await tab.evaluate(`(() => {
-    const g = window.__solara && window.__solara.game;
-    if (!g) return { booted: false };
-    const c = g.renderer.getContext();
+  await waitFor(async () => {
+    return await page.evaluate(() => !!window.__solara);
+  }, 20000, '__solara hook');
+
+  const info = await page.evaluate(() => {
+    const g = window.__solara;
+    const canvas = document.getElementById('game-canvas');
+    const gl = canvas.getContext('webgl2');
     return {
-      booted: true,
-      screen: g.screen,
-      webgl: !c.isContextLost(),
-      renderer: c.getParameter(c.VERSION),
-      player: { x: +g.player.x.toFixed(1), z: +g.player.z.toFixed(1), onFoot: g.player.onFoot, health: g.player.health },
+      mode: g.state().mode,
+      webgl: gl ? gl.getParameter(gl.VERSION) : null,
       traffic: g.traffic.cars.length,
       parked: g.traffic.parked.length,
       peds: g.peds.peds.length,
-      drawCalls: g.renderer.info.render.calls,
-      triangles: g.renderer.info.render.triangles,
-      geometries: g.renderer.info.memory.geometries,
-      textures: g.renderer.info.memory.textures,
+      colliders: g.city.colliders.length,
+      titleVisible: getComputedStyle(document.getElementById('title-screen')).display !== 'none',
+      canvasSize: [canvas.width, canvas.height],
     };
-  })()`);
-  console.log(JSON.stringify(state, null, 2));
-  const errors = tab.consoleMessages.filter((m) => m.startsWith('error') || m.startsWith('exception'));
-  console.log('console errors:', errors.length ? '\n' + errors.join('\n') : 'none');
-  const origin = new URL(url).origin;
-  const foreign = tab.requests.filter((u) => {
-    if (u.startsWith('data:') || u.startsWith('chrome')) return false;
-    if (u.startsWith(origin)) return false;
-    if (origin === 'null' && u.startsWith('file://')) return false; // file:// pages
-    return true;
   });
-  console.log('network requests:', tab.requests.length, '| foreign:', foreign.length ? foreign.join(', ') : 'none');
-  console.log('failed requests:', tab.failedRequests.length ? tab.failedRequests.join(' | ') : 'none');
+  console.log(JSON.stringify(info, null, 2));
+  const check = (name, ok) => {
+    console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`);
+    if (!ok) failed += 1;
+  };
+  check('boots to title screen', info.mode === 'title' && info.titleVisible);
+  check('WebGL 2.0', !!info.webgl && info.webgl.includes('WebGL 2.0'));
+  check('traffic cars present', info.traffic >= 10);
+  check('parked cars present', info.parked >= 5);
+  check('pedestrians present', info.peds >= 15);
+  check('building colliders present', info.colliders >= 30);
+  // Let a few frames render, then read the renderer's draw calls.
+  await page.waitForTimeout(2500);
+  const render = await page.evaluate(() => {
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => {
+        const g = window.__solara;
+        resolve({ mode: g.state().mode });
+      });
+    });
+  });
+  console.log('after 2.5s:', JSON.stringify(render));
+  const sum = summarize('smoke', errors, requests);
+  check('0 console errors', sum.errors === 0);
+  check('0 foreign network requests', sum.foreign === 0);
+} catch (e) {
+  console.log('FAIL smoke threw:', e.message);
+  failed += 1;
 } finally {
-  tab.close();
+  await browser.close();
 }
-process.exit(0);
+console.log(failed === 0 ? 'SMOKE: ALL PASS' : `SMOKE: ${failed} FAILURES`);
+process.exit(failed === 0 ? 0 : 1);

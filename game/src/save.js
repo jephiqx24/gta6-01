@@ -1,44 +1,39 @@
-// Save / load: cash, missions done and the player's position, kept in
-// localStorage (this browser only). A save never blocks play if storage is
-// off — it just lasts this visit.
-
+// Save: cash, debt, missions completed and the player's spot, in localStorage.
 import { SAVE_KEY } from './config.js';
 
-export function readSave() {
+export function loadSave() {
   try {
-    const raw = window.localStorage.getItem(SAVE_KEY);
+    const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
-    const data = JSON.parse(raw);
-    if (!data || typeof data.cash !== 'number') return null;
-    return data;
+    const s = JSON.parse(raw);
+    if (typeof s !== 'object' || s === null) return null;
+    return s;
   } catch {
     return null;
   }
 }
 
-export function writeSave(game) {
+export function saveGame(state) {
   try {
-    const data = {
-      cash: game.missions.cash,
-      debt: game.missions.debt,
-      done: game.missions.done,
-      index: game.missions.index,
-      x: game.player.x,
-      z: game.player.z,
-      heading: game.player.heading,
-      health: game.player.health,
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      cash: state.cash,
+      debt: state.debt,
+      missionsDone: state.missionsDone,
+      x: state.x,
+      z: state.z,
+      heading: state.heading,
+      wanted: state.wanted,
       savedAt: Date.now(),
-    };
-    window.localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    }));
   } catch {
-    // Storage can be off (private windows): the game still plays.
+    // Storage full or unavailable: the game keeps running unsaved.
   }
 }
 
 export function clearSave() {
   try {
-    window.localStorage.removeItem(SAVE_KEY);
+    localStorage.removeItem(SAVE_KEY);
   } catch {
-    // Ignore.
+    // ignore
   }
 }

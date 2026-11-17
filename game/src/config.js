@@ -1,91 +1,78 @@
-// Solara City — tuning, layout and palette. One place for every number the
-// systems share, so the city, the AI and the minimap always agree.
+// World layout, tuning and palette for Solara City. One place for every number.
+export const SEED = 1337;
 
-// --- City layout ------------------------------------------------------------
-export const BLOCK = 46; // building block side, metres
-export const STREET = 14; // street width, metres
-export const PITCH = BLOCK + STREET; // 60 m between street centre lines
-export const STREET_COUNT = 8; // streets per axis
-export const STREET_FIRST = -((STREET_COUNT - 1) * PITCH) / 2; // -210
-export const CITY_HALF = STREET_FIRST + (STREET_COUNT - 1) * PITCH + STREET / 2; // 217
-export const LANE = 3.5; // lane centre offset from a street centre line
-export const WATER_X = 232; // where the beach ends and the sea begins
-export const SEA_HALF = 260; // sea plane extends this far east
-
-/** Centre-line coordinate of street i (0..STREET_COUNT-1) on either axis. */
-export function streetAt(i) {
-  return STREET_FIRST + i * PITCH;
-}
-
-/** Nearest street index to a coordinate. */
-export function nearestStreetIndex(coord) {
-  return Math.max(0, Math.min(STREET_COUNT - 1, Math.round((coord - STREET_FIRST) / PITCH)));
-}
-
-/** Is a point on a road (within a street's width, either axis)? */
-export function isOnRoad(x, z) {
-  const half = STREET / 2 + 0.5;
-  for (let i = 0; i < STREET_COUNT; i++) {
-    const c = streetAt(i);
-    if (Math.abs(x - c) < half || Math.abs(z - c) < half) return true;
-  }
-  return false;
-}
-
-/** Clamp a position inside the drivable city (plus the beach). */
-export function clampToCity(x, z) {
-  const m = CITY_HALF + 8;
-  return [Math.max(-m, Math.min(WATER_X + 6, x)), Math.max(-m, Math.min(m, z))];
-}
-
-// --- Palette (sun-soaked coastal city, all original) ------------------------
-export const PALETTE = {
-  skyTop: 0x7a4a8f,
-  skyHorizon: 0xff9a5c,
-  sun: 0xffb36b,
-  fog: 0xf2a56b,
-  asphalt: 0x4a4f58,
-  sidewalk: 0xb9a98f,
-  blockGround: 0x8f8271,
-  sand: 0xe8cf9e,
-  sea: 0x2e6f8e,
-  seaDeep: 0x1d4e6b,
-  building: [0xe8b48a, 0xd99a6c, 0xc98a7a, 0x9fb8a8, 0x7fa8b8, 0xe0cfa8, 0xb08a9a, 0xf0d9b0],
-  tower: [0x8a9ab0, 0x6a7a98, 0xa8b8c8, 0x98a8b8, 0xd8c8a8],
-  roof: 0x5a4a42,
-  car: [0xd83a2e, 0x2e6fd8, 0xf0c030, 0x30b060, 0xe8e8e8, 0x222226, 0x8a4ad8, 0xe07a30, 0x40c8c8, 0xc8c8d0],
-  police: 0x1a2a3a,
-  taxi: 0xf0c030,
+// City grid: streets every PITCH units, PITCH = BLOCK + STREET.
+export const WORLD = {
+  pitch: 50,
+  block: 36,
+  street: 14,
+  half: 225,
+  // Street centre lines (both axes).
+  lines: [-200, -150, -100, -50, 0, 50, 100, 150, 200],
+  downtown: 110,
+  seaX: 210,
+  seaFar: 460,
 };
 
-// --- Player / driving -------------------------------------------------------
+export const PALETTE = {
+  skyTop: 0x2b3a6e,
+  skyMid: 0xff9a5c,
+  sun: 0xffd9a0,
+  ground: 0x51565f,
+  sidewalk: 0x8a8f9a,
+  road: 0x454a58,
+  line: 0xd8d8c8,
+  crosswalk: 0xe8e8e0,
+  sea: 0x1d4e6b,
+  pier: 0x7a5a38,
+  building: [0x8a7a6a, 0x7a8b9a, 0x9a8b7a, 0x6a7a8b, 0xaa9a8a],
+  tower: [0x5a6a8b, 0x6a5a7a, 0x4a5e75, 0x7a6a5a],
+  windowLit: 0xffd27a,
+  windowDark: 0x1c2733,
+  tree: 0x2e6b34,
+  trunk: 0x5a3a22,
+  lamp: 0xffe9a8,
+  grass: 0x3f7a3a,
+  carColors: [0xc23b2e, 0x2e6bc2, 0xd8a020, 0x3aa84f, 0x8a3aa8, 0xd8d8d8, 0x222222, 0x2e8a8a],
+  police: 0x1a1a2e,
+  taxi: 0xf2c200,
+  marker: 0xffd23f,
+  markerBeam: 0xffd23f,
+};
+
 export const PLAYER = {
-  walkSpeed: 4.2,
-  runSpeed: 7.2,
-  radius: 0.45,
+  walkSpeed: 5,
+  runSpeed: 9,
+  radius: 0.55,
   height: 1.8,
   health: 100,
+  punchRange: 2.2,
+  punchDamage: 25,
+  pistolRange: 60,
+  pistolDamage: 34,
 };
 
 export const CAR = {
   accel: 16,
   brake: 30,
-  reverseAccel: 10,
-  maxSpeed: 38,
-  maxReverse: 9,
-  steerMax: 0.55,
-  grip: 6.5,
+  maxSpeed: 34,
+  maxReverse: 10,
+  steerRate: 1.9,
+  drag: 0.55,
+  grip: 8,
+  length: 4.2,
+  width: 1.9,
 };
 
-// --- Wanted / police --------------------------------------------------------
-export const WANTED_MAX = 5;
-export const WANTED_DECAY_IDLE = 20; // seconds without a crime before decay starts
-export const WANTED_DECAY_STEP = 12; // seconds per star lost while hidden
-export const POLICE_PER_STAR = [0, 2, 3, 4, 5, 6];
-export const BUSTED_HOLD_SECONDS = 3; // police close + player still = busted
+export const WANTED = {
+  max: 5,
+  decaySeconds: 26,
+  steal: 1,
+  hitPed: 1,
+  shoot: 1,
+  ramPolice: 1,
+};
 
-// --- Missions ---------------------------------------------------------------
-export const DEBT_TOTAL = 5000;
-
-// --- Save -------------------------------------------------------------------
+export const MISSION_REWARDS = [600, 800, 900, 1200, 1500];
+export const START_DEBT = 5000;
 export const SAVE_KEY = 'solara-city-save-v1';

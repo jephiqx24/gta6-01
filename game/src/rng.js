@@ -1,10 +1,7 @@
-// Seeded RNG (mulberry32) so the city, traffic and missions are deterministic
-// for a given seed — the same seed always builds the same Solara City.
-
-/** Create a mulberry32 generator from a 32-bit seed. */
-export function createRandom(seed) {
+// Seeded deterministic RNG (mulberry32). Same seed, same city, every load.
+export function mulberry32(seed) {
   let a = seed >>> 0;
-  return function random() {
+  return function next() {
     a |= 0;
     a = (a + 0x6d2b79f5) | 0;
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
@@ -13,29 +10,21 @@ export function createRandom(seed) {
   };
 }
 
-/** Integer in [min, max] inclusive, from a generator. */
-export function randomInt(random, min, max) {
-  return min + Math.floor(random() * (max - min + 1));
-}
-
-/** Pick one element of an array, from a generator. */
-export function randomPick(random, array) {
-  return array[Math.floor(random() * array.length)];
-}
-
-/** Random float in [min, max), from a generator. */
-export function randomRange(random, min, max) {
-  return min + random() * (max - min);
-}
-
-/** Shuffle a copy of an array, from a generator. */
-export function shuffle(random, array) {
-  const out = array.slice();
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
-    const tmp = out[i];
-    out[i] = out[j];
-    out[j] = tmp;
-  }
-  return out;
+export function makeRng(seed) {
+  const next = mulberry32(seed);
+  return {
+    next,
+    range(a, b) {
+      return a + (b - a) * next();
+    },
+    int(a, b) {
+      return Math.floor(a + (b - a + 1) * next());
+    },
+    pick(arr) {
+      return arr[Math.floor(next() * arr.length)];
+    },
+    chance(p) {
+      return next() < p;
+    },
+  };
 }

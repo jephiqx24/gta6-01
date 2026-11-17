@@ -1,112 +1,103 @@
-// Particles and camera shake: skid smoke, crash bursts, muzzle flashes,
-// pickup sparkles. One Points cloud per burst type, recycled, so no
-// allocation happens while playing.
+// Particles: a pooled THREE.Points burst system (crashes, sparks, muzzle)
+// plus fading skid-mark quads for hard cornering.
+import { THREE } from './three.js';
 
-const THREE = window.THREE;
-const MAX_PARTICLES = 600;
+const MAX = 320;
 
-/** A small pool of point sprites with velocity, life and colour. */
-export class Particles {
-  constructor(scene) {
-    this.scene = scene;
-    this.positions = new Float32Array(MAX_PARTICLES * 3);
-    this.colors = new Float32Array(MAX_PARTICLES * 3);
-    this.vel = new Float32Array(MAX_PARTICLES * 3);
-    this.life = new Float32Array(MAX_PARTICLES);
-    this.maxLife = new Float32Array(MAX_PARTICLES);
-    this.head = 0;
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
-    geo.setAttribute('color', new THREE.BufferAttribute(this.colors, 3));
-    const mat = new THREE.PointsMaterial({
-      size: 0.45,
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.9,
-      depthWrite: false,
-    });
-    this.points = new THREE.Points(geo, mat);
-    this.points.frustumCulled = false;
-    this.scene.add(this.points);
-    this.shake = 0;
-    for (let i = 0; i < MAX_PARTICLES; i++) this.positions[i * 3 + 1] = -100;
+export function createParticles(scene) {
+  const positions = new Float32Array(MAX * 3);
+  const colors = new Float32Array(MAX * 3);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const mat = new THREE.PointsMaterial({ size: 0.55, vertexColors: true, transparent: true, opacity: 0.95, depthWrite: false });
+  const points = new THREE.Points(geo, mat);
+  points.frustumCulled = false;
+  scene.add(points);
+  const parts = [];
+  for (let i = 0; i < MAX; i++) {
+    parts.push({ life: 0, vx: 0, vy: 0, vz: 0, x: 0, y: -100, z: 0 });
+    positions[i * 3 + 1] = -100;
   }
+  let cursor = 0;
 
-  spawn(x, y, z, count, color, speed, life, up = 0.5) {
+  // Skid marks: a pool of dark quads on the road that fade out.
+  const skidGeo = new THREE.PlaneGeometry(0.5, 1.6);
+  const skids = [];
+  for (let i = 0; i < 48; i++) {
+    const m = new THREE.Mesh(
+      skidGeo,
+      new THREE.MeshBasicMaterial({ color: 0x0a0a0a, transparent: true, opacity: 0, depthWrite: false })
+    );
+    m.rotation.x = -Math.PI / 2;
+    m.position.y = 0.07;
+    m.visible = false;
+    scene.add(m);
+    skids.push({ mesh: m, life: 0 });
+  }
+  let skidCursor = 0;
+
+  function burst(x, y, z, colorHex, count, speed, up = 3) {
+    const c = new THREE.Color(colorHex);
     for (let n = 0; n < count; n++) {
-      const i = this.head;
-      this.head = (this.head + 1) % MAX_PARTICLES;
-      this.positions[i * 3] = x;
-      this.positions[i * 3 + 1] = y;
-      this.positions[i * 3 + 2] = z;
+      const p = parts[cursor];
+      cursor = (cursor + 1) % MAX;
+      p.life = 0.5 + Math.random() * 0.5;
+      p.x = x;
+      p.y = y;
+      p.z = z;
       const a = Math.random() * Math.PI * 2;
-      const s = speed * (0.4 + Math.random() * 0.6);
-      this.vel[i * 3] = Math.cos(a) * s;
-      this.vel[i * 3 + 1] = Math.random() * speed * up;
-      this.vel[i * 3 + 2] = Math.sin(a) * s;
-      this.colors[i * 3] = ((color >> 16) & 255) / 255;
-      this.colors[i * 3 + 1] = ((color >> 8) & 255) / 255;
-      this.colors[i * 3 + 2] = (color & 255) / 255;
-      this.life[i] = life * (0.6 + Math.random() * 0.4);
-      this.maxLife[i] = this.life[i];
+      const r = (0.3 + Math.random() * 0.7) * speed;
+      p.vx = Math.cos(a) * r;
+      p.vz = Math.sin(a) * r;
+      p.vy = Math.random() * up;
+      const i = parts.indexOf(p);
+      colors[i * 3] = c.r;
+      colors[i * 3 + 1] = c.g;
+      colors[i * 3 + 2] = c.b;
     }
+    geo.attributes.color.needsUpdate = true;
   }
 
-  skid(x, z) {
-    this.spawn(x, 0.3, z, 2, 0xbbbbbb, 1.2, 0.7, 0.4);
+  function addSkid(x, z, heading) {
+    const s = skids[skidCursor];
+    skidCursor = (skidCursor + 1) % skids.length;
+    s.mesh.position.set(x, 0.07, z);
+    s.mesh.rotation.z = -heading;
+    s.mesh.visible = true;
+    s.mesh.material.opacity = 0.55;
+    s.life = 4;
   }
 
-  crash(x, z) {
-    this.spawn(x, 1, z, 14, 0xffa040, 7, 0.6, 0.9);
-    this.spawn(x, 0.6, z, 8, 0x888888, 3, 1.0, 0.5);
-    this.shake = Math.max(this.shake, 0.5);
-  }
-
-  muzzle(x, y, z) {
-    this.spawn(x, y, z, 6, 0xffe080, 6, 0.18, 0.2);
-  }
-
-  sparkle(x, y, z) {
-    this.spawn(x, y, z, 18, 0xffd24a, 2.5, 0.9, 1);
-  }
-
-  addShake(amount) {
-    this.shake = Math.min(1, this.shake + amount);
-  }
-
-  /** Camera shake offset for this frame (decays on its own). */
-  shakeOffset(dt) {
-    this.shake = Math.max(0, this.shake - dt * 1.8);
-    const s = this.shake * this.shake * 0.35;
-    return {
-      x: (Math.random() - 0.5) * s,
-      y: (Math.random() - 0.5) * s,
-    };
-  }
-
-  update(dt) {
-    let any = false;
-    for (let i = 0; i < MAX_PARTICLES; i++) {
-      if (this.life[i] <= 0) continue;
-      any = true;
-      this.life[i] -= dt;
-      if (this.life[i] <= 0) {
-        this.positions[i * 3 + 1] = -100;
+  function update(dt) {
+    for (let i = 0; i < MAX; i++) {
+      const p = parts[i];
+      if (p.life <= 0) continue;
+      p.life -= dt;
+      if (p.life <= 0) {
+        positions[i * 3 + 1] = -100;
         continue;
       }
-      this.positions[i * 3] += this.vel[i * 3] * dt;
-      this.positions[i * 3 + 1] += this.vel[i * 3 + 1] * dt;
-      this.positions[i * 3 + 2] += this.vel[i * 3 + 2] * dt;
-      this.vel[i * 3 + 1] -= 6 * dt;
-      const fade = this.life[i] / this.maxLife[i];
-      this.colors[i * 3] *= 0.995;
-      this.colors[i * 3 + 1] *= 0.995;
-      this.colors[i * 3 + 2] *= 0.995;
-      void fade;
+      p.vy -= 12 * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.z += p.vz * dt;
+      if (p.y < 0.05) {
+        p.y = 0.05;
+        p.vy *= -0.3;
+      }
+      positions[i * 3] = p.x;
+      positions[i * 3 + 1] = p.y;
+      positions[i * 3 + 2] = p.z;
     }
-    if (any) {
-      this.points.geometry.attributes.position.needsUpdate = true;
-      this.points.geometry.attributes.color.needsUpdate = true;
+    geo.attributes.position.needsUpdate = true;
+    for (const s of skids) {
+      if (s.life <= 0) continue;
+      s.life -= dt;
+      s.mesh.material.opacity = Math.max(0, s.life / 4) * 0.55;
+      if (s.life <= 0) s.mesh.visible = false;
     }
   }
+
+  return { burst, addSkid, update };
 }
