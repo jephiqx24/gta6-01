@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Solara City — an open-world getaway</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1218; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  .hidden { display: none !important; }
+  .panel { background: rgba(22, 16, 30, 0.72); border: 1px solid rgba(255, 180, 100, 0.35); border-radius: 12px; color: #fff; backdrop-filter: blur(4px); }
+
+  /* --- HUD --- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+  #stats { position: absolute; top: 14px; left: 14px; padding: 10px 14px; min-width: 210px; }
+  #stars { font-size: 26px; letter-spacing: 3px; color: #8a8a9a; line-height: 1; }
+  #stars.hot { color: #ffd24a; text-shadow: 0 0 12px rgba(255, 180, 40, 0.9); animation: pulse 0.7s infinite alternate; }
+  @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.06); } }
+  #cash { font-size: 22px; font-weight: 800; color: #7ae08a; margin-top: 4px; }
+  #debt { font-size: 13px; color: #ffb08a; margin-top: 2px; }
+  #health-wrap { margin-top: 8px; height: 10px; background: rgba(255,255,255,0.18); border-radius: 5px; overflow: hidden; }
+  #health-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #57d977, #a8e05a); border-radius: 5px; transition: width 0.2s; }
+  #health-fill.low { background: linear-gradient(90deg, #e5534b, #ff8a5a); }
+  #minimap-wrap { position: absolute; top: 14px; right: 14px; padding: 6px; }
+  #minimap { display: block; width: 200px; height: 200px; border-radius: 8px; }
+  #objective { position: absolute; left: 50%; bottom: 92px; transform: translateX(-50%); padding: 9px 18px; font-size: 15px; font-weight: 600; white-space: nowrap; max-width: 86vw; overflow: hidden; text-overflow: ellipsis; }
+  #speed { position: absolute; right: 18px; bottom: 20px; font-size: 30px; font-weight: 800; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.7); }
+  #help { position: absolute; left: 14px; bottom: 16px; padding: 8px 12px; font-size: 12px; line-height: 1.55; color: #d8d0e8; }
+  #crosshair { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; transform: translate(-50%, -50%); }
+  #crosshair::before, #crosshair::after { content: ''; position: absolute; background: #fff; box-shadow: 0 0 4px #000; }
+  #crosshair::before { left: 10px; top: 0; width: 2px; height: 22px; }
+  #crosshair::after { left: 0; top: 10px; width: 22px; height: 2px; }
+  #toast { position: absolute; left: 50%; top: 96px; transform: translateX(-50%); padding: 10px 20px; font-size: 16px; font-weight: 700; color: #ffe9a8; white-space: nowrap; }
+  #vignette { position: fixed; inset: 0; pointer-events: none; z-index: 6; opacity: 0; transition: opacity 0.35s; background: radial-gradient(ellipse at center, transparent 55%, rgba(200, 20, 20, 0.55) 100%); }
+  #banner { position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%); font-size: 44px; font-weight: 900; color: #ffd24a; text-shadow: 0 4px 24px rgba(0,0,0,0.8); white-space: nowrap; }
+
+  /* --- Overlays --- */
+  .overlay { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; background: linear-gradient(160deg, rgba(60, 20, 60, 0.82), rgba(20, 10, 30, 0.88)); }
+  .card { max-width: 640px; width: 92vw; padding: 34px 40px; text-align: center; }
+  .card h1 { margin: 0; font-size: 58px; letter-spacing: 4px; background: linear-gradient(90deg, #ffb36b, #ff6a8a, #ffd24a); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .card h2 { margin: 6px 0 0; font-size: 15px; font-weight: 600; letter-spacing: 3px; color: #ffb08a; text-transform: uppercase; }
+  .card p.story { margin: 20px 0 6px; font-size: 16px; line-height: 1.6; color: #f0e8f8; }
+  .card p.small { font-size: 13px; color: #b8a8c8; line-height: 1.5; }
+  .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 18px; text-align: left; font-size: 13.5px; color: #e8e0f0; margin: 18px auto 6px; max-width: 480px; }
+  .controls b { color: #ffd24a; font-weight: 700; }
+  .btn { pointer-events: auto; display: inline-block; margin: 14px 6px 0; padding: 13px 30px; font-size: 17px; font-weight: 800; letter-spacing: 1px; color: #241016; background: linear-gradient(90deg, #ffb36b, #ffd24a); border: none; border-radius: 999px; cursor: pointer; box-shadow: 0 4px 18px rgba(255, 150, 60, 0.45); }
+  .btn:hover { filter: brightness(1.08); }
+  .btn.ghost { background: transparent; color: #ffd24a; border: 2px solid #ffd24a; box-shadow: none; }
+  .card h1.over { background: linear-gradient(90deg, #ff5a5a, #ff8a5a); -webkit-background-clip: text; background-clip: text; }
+  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+</style>
+</head>
+<body>
+<canvas id="view" aria-label="Solara City: an open-world crime game. Drive, steal cars, dodge the police and pay off your debt."></canvas>
+
+<div id="hud" class="hidden">
+  <div id="stats" class="panel">
+    <div id="stars">☆☆☆☆☆</div>
+    <div id="cash">$0</div>
+    <div id="debt">Debt: $5,000</div>
+    <div id="health-wrap"><div id="health-fill"></div></div>
+  </div>
+  <div id="minimap-wrap" class="panel"><canvas id="minimap" width="200" height="200"></canvas></div>
+  <div id="objective" class="panel"></div>
+  <div id="speed" class="hidden">0 km/h</div>
+  <div id="help" class="panel">WASD move / drive &nbsp;·&nbsp; Shift run<br>E enter / exit car &nbsp;·&nbsp; Click / F shoot &amp; punch<br>Mouse drag orbit &nbsp;·&nbsp; P pause &nbsp;·&nbsp; M mute</div>
+  <div id="crosshair" class="hidden"></div>
+  <div id="toast" class="panel hidden"></div>
+  <div id="banner" class="hidden"></div>
+</div>
+<div id="vignette"></div>
+
+<div id="menu" class="overlay">
+  <div class="card panel">
+    <h1>SOLARA CITY</h1>
+    <h2>An open-world getaway</h2>
+    <p class="story">Rio is $5,000 in debt to Vera, queen of the Solara crew. Five jobs.
+      One sun-soaked city. Steal the cars, dodge the precinct, pay it off —
+      or the city owns you.</p>
+    <div class="controls">
+      <div><b>WASD</b> — walk / drive</div><div><b>Shift</b> — run</div>
+      <div><b>Mouse drag</b> — orbit camera</div><div><b>Wheel</b> — zoom</div>
+      <div><b>E</b> — enter / exit car</div><div><b>Click / F</b> — shoot / punch</div>
+      <div><b>P / Esc</b> — pause</div><div><b>M</b> — mute sound</div>
+    </div>
+    <button id="btn-start" class="btn">START ENGINE</button>
+    <button id="btn-continue" class="btn ghost hidden">CONTINUE</button>
+    <p class="small">A fully original game: its city, characters, vehicles, names and story
+      are invented here. No Rockstar or GTA material. Runs offline — no network requests.</p>
+  </div>
+</div>
+
+<div id="pause" class="overlay hidden">
+  <div class="card panel">
+    <h1 style="font-size: 40px;">PAUSED</h1>
+    <p class="story">The city waits. Vera does not.</p>
+    <button id="btn-resume" class="btn">RESUME</button>
+    <button id="btn-quit" class="btn ghost">QUIT TO TITLE</button>
+  </div>
+</div>
+
+<div id="over" class="overlay hidden">
+  <div class="card panel">
+    <h1 id="over-title" class="over">BUSTED</h1>
+    <p class="story" id="over-text">The precinct caught up with you.</p>
+    <p class="small" id="over-stats"></p>
+    <button id="btn-retry" class="btn">BACK ON THE STREETS</button>
+    <button id="btn-over-quit" class="btn ghost">QUIT TO TITLE</button>
+  </div>
+</div>
+
+<p id="status" role="status" aria-live="polite"></p>
+<script src="./vendor/three.min.js"></script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
