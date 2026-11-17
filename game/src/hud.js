@@ -90,9 +90,7 @@ export class HUD {
     const ctx = this.mapCtx;
     const S = MAP_SIZE;
     ctx.clearRect(0, 0, S, S);
-    // Sea on the east edge.
-    ctx.fillStyle = '#2e6f8e';
-    ctx.fillRect(toMap(WATER_X - 16), 0, S - toMap(WATER_X - 16), S);
+    // Ground, then the sea on the east edge.
     ctx.fillStyle = '#8f8271';
     ctx.fillRect(0, 0, S, S);
     ctx.fillStyle = '#2e6f8e';

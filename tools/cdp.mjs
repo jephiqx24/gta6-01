@@ -93,10 +93,12 @@ export async function openTab(url, width = 1440, height = 900) {
     async releaseKey(key) {
       await send('Input.dispatchKeyEvent', { type: 'keyUp', key });
     },
-    /** Save a PNG screenshot of the current viewport. */
-    async screenshot(outPath) {
+    /** Save a screenshot of the current viewport. JPEG when outPath ends
+     *  .jpg/.jpeg (quality 85), PNG otherwise. */
+    async screenshot(outPath, quality = 85) {
       const { writeFileSync } = await import('node:fs');
-      const shot = await send('Page.captureScreenshot', { format: 'png' });
+      const jpeg = /\.jpe?g$/i.test(outPath);
+      const shot = await send('Page.captureScreenshot', jpeg ? { format: 'jpeg', quality } : { format: 'png' });
       writeFileSync(outPath, Buffer.from(shot.data, 'base64'));
       return outPath;
     },

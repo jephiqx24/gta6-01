@@ -1,13 +1,14 @@
-// Screenshot one URL: node tools/shot.mjs <url> <out.png> [width] [height]
+// Screenshot one URL: node tools/shot.mjs <url> <out.jpg> [width] [height]
 // Waits for window.__shotReady (set by the game's shot mode), then captures
 // the viewport — 1280x720 by default, the gate's long-side cap — and prints
-// the console errors it saw, if any.
+// the console errors it saw, if any. A .jpg output is captured as JPEG
+// (quality 85) so it lands under the 256 KiB screenshot cap.
 
 import { openTab, sleep } from './cdp.mjs';
 
 const [,, url, out, widthArg, heightArg] = process.argv;
 if (!url || !out) {
-  console.error('usage: node tools/shot.mjs <url> <out.png> [width] [height]');
+  console.error('usage: node tools/shot.mjs <url> <out.jpg> [width] [height]');
   process.exit(2);
 }
 const width = Number(widthArg) || 1280;

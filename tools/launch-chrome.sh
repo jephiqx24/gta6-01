@@ -1,7 +1,7 @@
 #!/bin/bash
 # Launch headless Chromium for Solara City testing (CDP on port 9222).
-# WebGL needs the Hatch policy file; tests run over file:// URLs (the
-# sandbox blocks localhost navigation from about:blank tabs).
+# WebGL needs the Hatch policy file; tests run over the local server
+# (http://localhost:8080) or over file:// URLs (SOLARA_BASE).
 DOMAINS_FILE=/var/lib/hatch-browser/rootfs-base/usr/share/hatch/chromium/webgl-allowed-domains.txt
 SHA=$(sha256sum "$DOMAINS_FILE" | cut -d' ' -f1)
 pkill -x chrome 2>/dev/null; sleep 1

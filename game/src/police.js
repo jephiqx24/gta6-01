@@ -143,14 +143,12 @@ export class Police {
 
     // Chase cars.
     let nearestCarDist = Infinity;
-    let nearestCarSpeed = 0;
     for (const car of this.cars) {
       if (car.dead) continue;
       const dx = player.x - car.x;
       const dz = player.z - car.z;
       const dist = Math.hypot(dx, dz);
       nearestCarDist = Math.min(nearestCarDist, dist);
-      nearestCarSpeed = car.speed;
       // Pursuit: aim slightly ahead of the player.
       const px = player.x + (player.car ? Math.sin(player.heading) * player.car.speed * 0.4 : 0);
       const pz = player.z + (player.car ? Math.cos(player.heading) * player.car.speed * 0.4 : 0);
@@ -201,17 +199,17 @@ export class Police {
     }
 
     // Officers chase on foot and make the arrest.
+    const OFFICER_SPEED = 5.2;
     let arrested = false;
     for (const officer of this.officers) {
       const dx = player.x - officer.x;
       const dz = player.z - officer.z;
       const dist = Math.hypot(dx, dz);
-      const speed = player.onFoot ? 5.2 : 5.2;
       if (dist > 0.5) {
-        officer.x += (dx / dist) * speed * dt;
-        officer.z += (dz / dist) * speed * dt;
+        officer.x += (dx / dist) * OFFICER_SPEED * dt;
+        officer.z += (dz / dist) * OFFICER_SPEED * dt;
         officer.heading = Math.atan2(dx, dz);
-        officer.phase += dt * speed * 2.2;
+        officer.phase += dt * OFFICER_SPEED * 2.2;
         const swing = Math.sin(officer.phase) * 0.5;
         officer.mesh.userData.legL.rotation.x = swing;
         officer.mesh.userData.legR.rotation.x = -swing;
@@ -238,7 +236,6 @@ export class Police {
     } else {
       this.bustedTimer = Math.max(0, this.bustedTimer - dt * 2);
     }
-    void nearestCarSpeed;
   }
 
   nearestPoliceDist(x, z) {

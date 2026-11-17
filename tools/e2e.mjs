@@ -3,11 +3,16 @@
 // advanced with the game's stepSim hook (headless software rendering runs
 // far below 60 fps, so wall-clock key holds would under-advance the game);
 // keys are still sent through real CDP input events.
-// Usage: node tools/e2e.mjs
+// Usage: node tools/e2e.mjs [url]
+// Default URL is SOLARA_BASE (or http://localhost:8080) + /index.html?seed=7;
+// pass a file:// URL to test over file:// instead. Requests to the game's
+// own origin (localhost server or file://) are not foreign.
 
 import { openTab, sleep } from './cdp.mjs';
 
-const url = 'file:///home/hatch/workspace/makefun/gta6-01/game/index.html?seed=7';
+const base = process.env.SOLARA_BASE || 'http://localhost:8080';
+const url = process.argv[2] || `${base.replace(/\/$/, '')}/index.html?seed=7`;
+const origin = new URL(url).origin;
 const tab = await openTab(url, 1280, 720);
 const results = [];
 function check(name, ok, detail = '') {
@@ -71,12 +76,19 @@ try {
   check('E steals the car', !s.onFoot, JSON.stringify(s));
   check('stealing raises wanted to 1', s.wanted === 1, `wanted=${s.wanted}`);
 
-  // Drive forward (3 s of game time).
+  // Drive forward (3 s of game time), sampling speed along the way: a
+  // police ram or a traffic knock at the end of the window can stop the
+  // car, so the check is the peak speed and the distance covered, not the
+  // instantaneous speed at the last frame.
   const dx0 = s.x;
   const dz0 = s.z;
-  await stepSim(3, { x: 0, y: 1 });
-  s = await state();
-  check('car drives and gains speed', Math.abs(s.speed) > 5, `speed=${s.speed} m/s, moved ${Math.hypot(s.x - dx0, s.z - dz0).toFixed(1)}m`);
+  let maxSpeed = 0;
+  for (let i = 0; i < 6; i++) {
+    await stepSim(0.5, { x: 0, y: 1 });
+    s = await state();
+    maxSpeed = Math.max(maxSpeed, Math.abs(s.speed));
+  }
+  check('car drives and gains speed', maxSpeed > 5 && Math.hypot(s.x - dx0, s.z - dz0) > 20, `peak speed=${maxSpeed} m/s, moved ${Math.hypot(s.x - dx0, s.z - dz0).toFixed(1)}m`);
 
   // Mission 1 auto-begins at its start marker (the club).
   await tab.evaluate(`(() => {
@@ -120,7 +132,12 @@ try {
 
   const errors = tab.consoleMessages.filter((m) => m.startsWith('error') || m.startsWith('exception'));
   check('zero console errors', errors.length === 0, errors.join(' | '));
-  const foreign = tab.requests.filter((u) => !u.startsWith('file://') && !u.startsWith('data:') && !u.startsWith('chrome'));
+  const foreign = tab.requests.filter((u) => {
+    if (u.startsWith('data:') || u.startsWith('chrome')) return false;
+    if (u.startsWith(origin)) return false;
+    if (origin === 'null' && u.startsWith('file://')) return false; // file:// pages
+    return true;
+  });
   check('zero foreign network requests', foreign.length === 0, foreign.join(', '));
 } finally {
   tab.close();

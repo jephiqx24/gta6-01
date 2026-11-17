@@ -89,12 +89,10 @@ function makeGroundTexture() {
     ctx.fillRect(toPx(c - STREET / 2), 0, STREET * px, S);
     ctx.fillRect(0, toPx(c - STREET / 2), S, STREET * px);
   }
-  // Lane dashes (centre line, yellow) and edge lines.
-  ctx.fillStyle = '#d8b23a';
+  // Lane dashes along the centre of every street.
   ctx.fillStyle = '#e8e8e8';
   for (let i = 0; i < STREET_COUNT; i++) {
     const c = streetAt(i);
-    // centre dashes along both axes
     for (let d = -CITY_HALF; d < CITY_HALF; d += 12) {
       ctx.fillRect(toPx(c) - 1, toPx(d), 2, 6 * px);
       ctx.fillRect(toPx(d), toPx(c) - 1, 6 * px, 2);
@@ -201,6 +199,7 @@ function splitBoxSidesRoof(geo) {
   const roof = pick([8, 9, 10, 11, 12, 13, 14, 15], [[12, 6], [18, 6]]);
   return { sides, roof };
 }
+
 function mergeBoxes(geoms) {
   let vCount = 0;
   let iCount = 0;
